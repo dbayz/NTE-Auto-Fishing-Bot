@@ -17,3 +17,29 @@ this program work as macro, no inject into game or replace any files games Pleas
 Please read TOS in game about using Bot
 
 DWYOR - Do With Your Own Risk !!
+
+## Getting Started
+### Option 1: Prebuilt Executable (GUI)
+
+1. Download the latest `nte-auto-fish.zip` from [Releases](https://github.com/dbayz/NTE-Auto-Fishing-Bot/releases).
+2. Run it and Press Game Windows and leave it.
+
+### Option 2: Run From Source
+```bash
+git clone https://github.com/dbayz/NTE-Auto-Fishing-Bot.git
+cd NTE-Auto-Fishing-Bot
+pip install -r requirements.txt
+```
+
+Launch the GUI:
+
+```bash
+python nte-auto-fish.py
+```
+
+## Notes
+
+- Run from an elevated terminal on Windows.
+- Windowed fullscreen usually gives the most reliable capture behavior.
+
+Check Youtube for preview : [Youtube](https://youtu.be/r-Q7z-c2ZGw)
