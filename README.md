@@ -24,7 +24,7 @@ DWYOR - Do With Your Own Risk !!
 ### Option 1: Prebuilt Executable (GUI)
 
 1. Download the latest `nte-auto-fish.zip` from [Releases](https://github.com/dbayz/NTE-Auto-Fishing-Bot/releases).
-2. Run it and Press Game Windows and leave it.
+2. Run it and Press Game Windows then leave it.
 
 ### Option 2: Run From Source
 ```bash
