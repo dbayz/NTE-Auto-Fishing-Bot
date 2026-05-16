@@ -16,7 +16,7 @@ except Exception:
 
 # ==========================================
 # BOT SETTINGS
-FISH_WAIT_TIME = 8 
+FISH_WAIT_TIME = 7 
 # ==========================================
 
 bot_running = False
@@ -58,9 +58,13 @@ def manage_inventory(screen_width, screen_height, sct):
     
     # Click Quick Submit
     pyautogui.click(int(screen_width * 0.55), int(screen_height * 0.89))
-    if not safety_delay(1): return
+    #  change delay to 1,5 sec
+    if not safety_delay(1.5): return
     
     # Click Confirm
+    pyautogui.click(int(screen_width * 0.61), int(screen_height * 0.66))
+    if not safety_delay(1.0): return 
+    # Add second click to prevent miss frame
     pyautogui.click(int(screen_width * 0.61), int(screen_height * 0.66)) 
     if not safety_delay(1.5): return
     
@@ -96,7 +100,7 @@ def manage_inventory(screen_width, screen_height, sct):
     else:
         log_message("Selecting Universal Bait...")
         pyautogui.click(int(screen_width * 0.38), int(screen_height * 0.50))
-        if not safety_delay(1): return
+        if not safety_delay(1.5): return
         
     # Click "Switch" or "Purchase"
     pyautogui.click(int(screen_width * 0.61), int(screen_height * 0.66))
@@ -193,14 +197,17 @@ def manage_inventory(screen_width, screen_height, sct):
         # --- PHASE 4: PURCHASE ---
         log_message("Purchasing bait (Max Quantity)...")
         pyautogui.click(int(screen_width * 0.90), int(screen_height * 0.88)) # Slider to Max
-        if not safety_delay(0.5): return
+        if not safety_delay(1): return
         
         pyautogui.click(int(screen_width * 0.85), int(screen_height * 0.95)) # Purchase Button
         if not safety_delay(1.5): return 
 
         log_message("Confirming bulk purchase...")
         pyautogui.click(int(screen_width * 0.61), int(screen_height * 0.66)) # Confirm Button
-        if not safety_delay(1.5): return 
+        if not safety_delay(1.0): return
+        # Add another click to prevent miss frame
+        pyautogui.click(int(screen_width * 0.61), int(screen_height * 0.66)) # Confirm Button
+        if not safety_delay(1.8): return 
         
         log_message("Closing reward summary...")
         empty_area_y = int(screen_height * 0.75) 
@@ -262,7 +269,7 @@ def bot_logic():
     roi_h = int(screen_h * (50 / 1080))
     center_y_roi = roi_h // 2
 
-    with mss.mss() as sct:
+    with mss.MSS() as sct:
         try:
             while bot_running: 
                 log_message("\n" + "="*30)
@@ -321,7 +328,7 @@ def bot_logic():
                 log_message("Fish hooked! Reeling in...")
                 press_key('f')
 
-                if not safety_delay(1.5): break
+                if not safety_delay(1.0): break
                 log_message("Mini-game started (Tension Bar)!")
 
                 last_seen_bar = time.time() 
@@ -376,15 +383,18 @@ def bot_logic():
                 if not bot_running: break 
                 
                 log_message("Displaying results...")
-                if not safety_delay(4): break
+                # Change Delay to 3 sec
+                if not safety_delay(3): break
                 
                 log_message("Closing result window...")
+                pyautogui.click(screen_w / 2, screen_h / 1.5)
+                # Add second click
                 pyautogui.click(screen_w / 2, screen_h / 1.5)
                 if not safety_delay(1): break
                 pyautogui.click(screen_w / 2, screen_h / 1.5)
                 
-                log_message("Next cast in 3 seconds...")
-                if not safety_delay(3): break
+                log_message("Next cast in 2 seconds...")
+                if not safety_delay(2): break
                 
         except Exception as e:
             log_message(f"Error: {str(e)}")
@@ -423,6 +433,11 @@ root.geometry("470x380")
 root.resizable(False, False)
 root.attributes("-topmost", True) 
 
+try:
+    root.iconbitmap('icon.ico') 
+except Exception:
+    pass
+
 btn_frame = tk.Frame(root)
 btn_frame.pack(pady=10)
 
@@ -438,7 +453,7 @@ console_frame.pack(padx=15, pady=5, fill=tk.BOTH, expand=True)
 width = 45
 header_text = (
     f"{'=' * width}\n"
-    f"{'NTE AUTO FISHING BOT v1.1'.center(width)}\n"
+    f"{'NTE AUTO FISHING BOT v1.2'.center(width)}\n"
     f"{'[Ultimate Day/Night Fishing]'.center(width)}\n"
     f"{'=' * width}"
 )
