@@ -342,8 +342,8 @@ def bot_logic():
                     G = bar_line[:, 1].astype(np.int16)
                     R = bar_line[:, 2].astype(np.int16)
                     
-                    mask_yellow = (R > 130) & (G > 130) & ((R - B) > 20) & ((G - B) > 20)
-                    mask_blue = (B > 90) & (G > 90) & ((B - R) > 15) & ((G - R) > 15)
+                    mask_yellow = (R > 160) & (G > 150) & (B < 130) & ((R - B) > 50)
+                    mask_blue = (B > 160) & (G > 160) & (R < 140) & ((B - R) > 50)
                     
                     idx_yellow = np.where(mask_yellow)[0]
                     idx_blue = np.where(mask_blue)[0]
