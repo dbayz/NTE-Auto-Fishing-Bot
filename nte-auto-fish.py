@@ -453,7 +453,7 @@ console_frame.pack(padx=15, pady=5, fill=tk.BOTH, expand=True)
 width = 45
 header_text = (
     f"{'=' * width}\n"
-    f"{'NTE AUTO FISHING BOT v1.2'.center(width)}\n"
+    f"{'NTE AUTO FISHING BOT v1.3'.center(width)}\n"
     f"{'[Ultimate Day/Night Fishing]'.center(width)}\n"
     f"{'=' * width}"
 )
