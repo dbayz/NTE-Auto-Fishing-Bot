@@ -12,8 +12,10 @@ Tested on resolution 1080p NATIVE FULLSCREEN (you can try with another resolutio
 
 ONLY FOR AFK !
 
-This program work as macro, no inject into game or replace any files games Please disable any Upscaling 
-(DLSS / FSR) And FRAMEGEN or bot will not running
+This program work as macro, no inject into game or replace any files games.
+
+Please disable any Upscaling 
+(DLSS / FSR) And FRAMEGEN or bot will not running.
 
 ---
 Please read TOS in game about using Bot
