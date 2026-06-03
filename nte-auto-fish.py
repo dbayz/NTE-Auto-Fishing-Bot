@@ -5,6 +5,8 @@ import tkinter as tk
 import ctypes
 import mss
 import numpy as np
+import os
+import json
 
 # ==========================================
 # DISABLE WINDOWS DPI SCALING
@@ -49,7 +51,7 @@ def manage_inventory(screen_width, screen_height, sct):
     
     # --- STAGE 1: SELL FISH (Q) ---
     log_message("[1/3] Selling fish...")
-    press_key('q')
+    press_key(var_key_sell.get().lower())
     if not safety_delay(2): return 
     
     # Click Fish Market tab
@@ -77,7 +79,7 @@ def manage_inventory(screen_width, screen_height, sct):
     
     # --- STAGE 2: CHECK & EQUIP BAIT (E) ---
     log_message("[2/3] Checking for bait...")
-    press_key('e') # Open Bait Switch menu
+    press_key(var_key_bait.get().lower()) # Open Bait Switch menu
     if not safety_delay(1.5): return
     
     # === SMART DETECTOR 1: CHECK FOR PINK BORDER (ACTIVE BAIT) ===
@@ -152,17 +154,14 @@ def manage_inventory(screen_width, screen_height, sct):
             g_i = img_icon[:, :, 1].astype(np.int16)
             r_i = img_icon[:, :, 2].astype(np.int16)
             
-            # COLOR DETECTION LOGIC
-            # A. Pink Bag: Red dominant + Blue present
-            pink_bag = np.sum((r_i > 140) & (r_i > g_i + 30) & (b_i > 90))
-            # B. Brown Pellets: Darker Red/Orange, low Blue
-            brown_pellets = np.sum((r_i > 70) & (r_i < 160) & (r_i > g_i + 20) & (b_i < 100))
-            # C. Anti-Purple (Rod III)
-            purple_bg = np.sum((r_i > 120) & (b_i > 140) & (g_i < 90))
-            # D. Anti-Gold (Rod IV)
-            gold_bg = np.sum((r_i > 150) & (g_i > 110) & (b_i < 80))
+            # === COLOR DETECTION LOGIC (UPDATED FOR NEW BACKGROUND) ===
+            # A. Strict Pink Bag (Ribbon & Pink Plastic): High Red, Medium Blue, Low Green
+            pink_bag = np.sum((r_i > 160) & (b_i > 110) & (g_i < 130))
             
-            # E. Currency Check (Shells)
+            # B. Brown Pellets: Dark Red/Orange, Low Blue
+            brown_pellets = np.sum((r_i > 70) & (r_i < 170) & (r_i > g_i + 20) & (b_i < 100))
+            
+            # E. Currency Check
             price_x = int(screen_width * 0.85)
             price_y = int(screen_height * 0.82)
             price_w = int(screen_width * 0.04)
@@ -178,15 +177,17 @@ def manage_inventory(screen_width, screen_height, sct):
             b_h = img_price[:, :, 0].astype(np.int16)
             g_h = img_price[:, :, 1].astype(np.int16)
             r_h = img_price[:, :, 2].astype(np.int16)
+            
+            # Check if the currency is Cyan/Blue (Shell)
             shell_pixels = np.sum((b_h > 150) & (g_h > 100) & (r_h < 120))
             
-            # FINAL VALIDATION: Must be Pink Bag, Brown Pellets, NOT Gold/Purple, using Shells
-            if pink_bag > 150 and brown_pellets > 50 and purple_bg < 200 and gold_bg < 200 and shell_pixels > 10:
+            # FINAL VALIDATION: Just check Pink Bag, Brown Pellets, and Shell Currency!
+            if pink_bag > 100 and brown_pellets > 50 and shell_pixels > 10:
                 log_message(f"Target locked! Universal Bait found at grid ({px}, {py})")
                 target_found = True
                 break 
             else:
-                log_message(f"Skipping ({px}, {py}) -> Pnk:{pink_bag} Brwn:{brown_pellets} Gld:{gold_bg} Shll:{shell_pixels}")
+                log_message(f"Skipping ({px}, {py}) -> Pink:{pink_bag} Brown:{brown_pellets} Shell:{shell_pixels}")
         
         if not target_found:
             log_message("[ERROR] Universal Bait not found! Safety shut down.")
@@ -197,14 +198,14 @@ def manage_inventory(screen_width, screen_height, sct):
         # --- PHASE 4: PURCHASE ---
         log_message("Purchasing bait (Max Quantity)...")
         pyautogui.click(int(screen_width * 0.90), int(screen_height * 0.88)) # Slider to Max
-        if not safety_delay(1): return
+        if not safety_delay(1.5): return
         
         pyautogui.click(int(screen_width * 0.85), int(screen_height * 0.95)) # Purchase Button
         if not safety_delay(1.5): return 
 
         log_message("Confirming bulk purchase...")
         pyautogui.click(int(screen_width * 0.61), int(screen_height * 0.66)) # Confirm Button
-        if not safety_delay(1.0): return
+        if not safety_delay(1.5): return
         # Add another click to prevent miss frame
         pyautogui.click(int(screen_width * 0.61), int(screen_height * 0.66)) # Confirm Button
         if not safety_delay(1.8): return 
@@ -249,28 +250,33 @@ def manage_inventory(screen_width, screen_height, sct):
 def bot_logic():
     global bot_running
     
+    KEY_LEFT = var_key_left.get().lower()
+    KEY_RIGHT = var_key_right.get().lower()
+    
     log_message("\n>>> BOT PREPARATION <<<")
+    log_message(f"Active Keybinds -> LEFT: [{KEY_LEFT.upper()}], RIGHT: [{KEY_RIGHT.upper()}]")
     log_message("PLEASE SWITCH TO THE GAME WINDOW NOW!")
     
-    for i in range(5, 0, -1):
-        if not bot_running: return 
-        log_message(f"Starting in {i}...")
-        time.sleep(1)
+    try:
+        for i in range(5, 0, -1):
+            if not bot_running: return 
+            log_message(f"Starting in {i}...")
+            # Replace time.sleep(1) with safety_delay so countdown can be stopped
+            if not safety_delay(1): return 
+            
+        if not bot_running: return
+
+        screen_w, screen_h = pyautogui.size()
+        log_message(f"Detected Resolution: {screen_w}x{screen_h}")
         
-    if not bot_running: return
+        # Tension bar ROI coordinates 
+        roi_x = int(screen_w * (612 / 1920))
+        roi_y = int(screen_h * (50 / 1080))
+        roi_w = int(screen_w * (701 / 1920))
+        roi_h = int(screen_h * (50 / 1080))
+        center_y_roi = roi_h // 2
 
-    screen_w, screen_h = pyautogui.size()
-    log_message(f"Detected Resolution: {screen_w}x{screen_h}")
-    
-    # Tension bar ROI coordinates (Normalized for 1920x1080)
-    roi_x = int(screen_w * (612 / 1920))
-    roi_y = int(screen_h * (50 / 1080))
-    roi_w = int(screen_w * (701 / 1920))
-    roi_h = int(screen_h * (50 / 1080))
-    center_y_roi = roi_h // 2
-
-    with mss.MSS() as sct:
-        try:
+        with mss.MSS() as sct:
             while bot_running: 
                 log_message("\n" + "="*30)
                 log_message("--- Casting Line ---")
@@ -294,14 +300,15 @@ def bot_logic():
                 if pixel_white_count > ((btn_w * btn_h) * 0.5): 
                     log_message("[Recovery] Preparation menu detected!")
                     pyautogui.click(start_btn_x, start_btn_y)
-                    time.sleep(6.0) 
+                    # Replace time.sleep with safety_delay for responsiveness
+                    if not safety_delay(6.0): break 
                     press_key('f')
-                    time.sleep(1.5)
+                    if not safety_delay(1.5): break
                 else:
                     press_key('f')
-                    time.sleep(1.5) 
+                    if not safety_delay(1.5): break 
                 
-                # === OUT OF BAIT DETECTION (WHITE TEXT CHECK) ===
+                # === OUT OF BAIT DETECTION ===
                 banner_y = int(screen_h * 0.48)
                 banner_h = int(screen_h * 0.04)
                 box_left_x = int(screen_w * 0.35)
@@ -356,8 +363,8 @@ def bot_logic():
                     
                     if time.time() - last_seen_bar > 3.0:
                         log_message("Mini-game finished!")
-                        pyautogui.keyUp('a')
-                        pyautogui.keyUp('d')
+                        pyautogui.keyUp(KEY_LEFT)
+                        pyautogui.keyUp(KEY_RIGHT)
                         break 
 
                     if pos_yellow != -1 and len(blue_pixels) > 0:
@@ -366,29 +373,27 @@ def bot_logic():
                         deadzone = max(2, blue_width // 3) 
                         
                         if pos_yellow < (blue_center - deadzone):
-                            pyautogui.keyUp('a')
-                            pyautogui.keyDown('d')
+                            pyautogui.keyUp(KEY_LEFT)
+                            pyautogui.keyDown(KEY_RIGHT)
                         elif pos_yellow > (blue_center + deadzone):
-                            pyautogui.keyUp('d')
-                            pyautogui.keyDown('a')
+                            pyautogui.keyUp(KEY_RIGHT)
+                            pyautogui.keyDown(KEY_LEFT)
                         else:
-                            pyautogui.keyUp('a')
-                            pyautogui.keyUp('d')
+                            pyautogui.keyUp(KEY_LEFT)
+                            pyautogui.keyUp(KEY_RIGHT) 
                     else:
-                        pyautogui.keyUp('a')
-                        pyautogui.keyUp('d')
+                        pyautogui.keyUp(KEY_LEFT)
+                        pyautogui.keyUp(KEY_RIGHT) 
                         
                     time.sleep(0.005) 
                 
                 if not bot_running: break 
                 
                 log_message("Displaying results...")
-                # Change Delay to 3 sec
                 if not safety_delay(3): break
                 
                 log_message("Closing result window...")
                 pyautogui.click(screen_w / 2, screen_h / 1.5)
-                # Add second click
                 pyautogui.click(screen_w / 2, screen_h / 1.5)
                 if not safety_delay(1): break
                 pyautogui.click(screen_w / 2, screen_h / 1.5)
@@ -396,19 +401,22 @@ def bot_logic():
                 log_message("Next cast in 2 seconds...")
                 if not safety_delay(2): break
                 
-        except Exception as e:
-            log_message(f"Error: {str(e)}")
-        finally:
-            log_message(">>> BOT STOPPED <<<")
-            pyautogui.keyUp('a')
-            pyautogui.keyUp('d')
-            pyautogui.keyUp('esc') 
-            bot_running = False
-            start_btn.config(state=tk.NORMAL)
-            stop_btn.config(state=tk.DISABLED)
+    except Exception as e:
+        log_message(f"Error: {str(e)}")
+    finally:
+        log_message(">>> BOT STOPPED <<<")
+        pyautogui.keyUp(KEY_LEFT)
+        pyautogui.keyUp(KEY_RIGHT)
+        pyautogui.keyUp('esc') 
+        bot_running = False
+        
+        # Buttons restored to normal state
+        start_btn.config(state=tk.NORMAL)
+        stop_btn.config(state=tk.DISABLED)
 
 def start_click():
     global bot_running, purchase_session_count
+    save_settings()  #Save current keybind settings before starting
     if not bot_running:
         bot_running = True
         purchase_session_count = 0 
@@ -429,7 +437,7 @@ def stop_click():
 # GUI INITIALIZATION
 root = tk.Tk()
 root.title("Auto Fishing Bot - NTE")
-root.geometry("470x380") 
+root.geometry("470x420")
 root.resizable(False, False)
 root.attributes("-topmost", True) 
 
@@ -447,13 +455,102 @@ start_btn.grid(row=0, column=0, padx=10)
 stop_btn = tk.Button(btn_frame, text="STOP", bg="#f44336", fg="white", font=("Arial", 12, "bold"), width=12, state=tk.DISABLED, command=stop_click)
 stop_btn.grid(row=0, column=1, padx=10)
 
+
+# === SETTINGS KEYBIND & AUTO-SAVE ===
+settings_frame = tk.Frame(root)
+settings_frame.pack(pady=5)
+
+CONFIG_FILE = "settings.json"
+
+# 1. Default EN-US keybinds 
+config_data = {
+    "key_left": "A",
+    "key_right": "D",
+    "key_sell": "Q",
+    "key_bait": "E"
+}
+
+# 2. Load saved config if exists, overwrite defaults
+if os.path.exists(CONFIG_FILE):
+    try:
+        with open(CONFIG_FILE, "r") as f:
+            saved_config = json.load(f)
+            # Update default with saved data
+            config_data.update(saved_config) 
+    except Exception:
+        pass
+
+# 3. Setup StringVar for each keybind, initialize with config_data (default or loaded)
+var_key_left = tk.StringVar(value=config_data["key_left"])
+var_key_right = tk.StringVar(value=config_data["key_right"])
+var_key_sell = tk.StringVar(value=config_data["key_sell"])
+var_key_bait = tk.StringVar(value=config_data["key_bait"])
+
+# 4. Function to save settings to json file
+def save_settings():
+    try:
+        new_config = {
+            "key_left": var_key_left.get(),
+            "key_right": var_key_right.get(),
+            "key_sell": var_key_sell.get(),
+            "key_bait": var_key_bait.get()
+        }
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(new_config, f, indent=4)
+            
+        log_message("[Info] Settings auto-saved to file!") 
+        
+    except Exception as e:
+        log_message(f"[ERROR] Failed to save: {str(e)}")
+
+# 5. Format input ONLY to convert to uppercase (Without spamming disk)
+def format_left(*args):
+    val = var_key_left.get()
+    if len(val) > 0 and val != val[-1].upper():
+        var_key_left.set(val[-1].upper())
+
+def format_right(*args):
+    val = var_key_right.get()
+    if len(val) > 0 and val != val[-1].upper():
+        var_key_right.set(val[-1].upper())
+
+def format_sell(*args):
+    val = var_key_sell.get()
+    if len(val) > 0 and val != val[-1].upper():
+        var_key_sell.set(val[-1].upper())
+
+def format_bait(*args):
+    val = var_key_bait.get()
+    if len(val) > 0 and val != val[-1].upper():
+        var_key_bait.set(val[-1].upper())
+
+var_key_left.trace_add("write", format_left)
+var_key_right.trace_add("write", format_right)
+var_key_sell.trace_add("write", format_sell)
+var_key_bait.trace_add("write", format_bait)
+# ====================================
+# Keybind
+tk.Label(settings_frame, text="Left (<-) Keybind:").grid(row=0, column=0, padx=5, pady=2)
+tk.Entry(settings_frame, textvariable=var_key_left, width=5, justify='center').grid(row=0, column=1, padx=5)
+
+tk.Label(settings_frame, text="Right (->) Keybind:").grid(row=0, column=2, padx=15, pady=2)
+tk.Entry(settings_frame, textvariable=var_key_right, width=5, justify='center').grid(row=0, column=3, padx=5)
+
+# Baris 2: Inventory Keys
+tk.Label(settings_frame, text="Sell Fish Keybind:").grid(row=1, column=0, padx=5, pady=2)
+tk.Entry(settings_frame, textvariable=var_key_sell, width=5, justify='center').grid(row=1, column=1, padx=5)
+
+tk.Label(settings_frame, text="Bait Menu Keybind:").grid(row=1, column=2, padx=15, pady=2)
+tk.Entry(settings_frame, textvariable=var_key_bait, width=5, justify='center').grid(row=1, column=3, padx=5)
+# ================================================
+
 console_frame = tk.Frame(root, bg="#1e1e1e", bd=2, relief=tk.SUNKEN)
 console_frame.pack(padx=15, pady=5, fill=tk.BOTH, expand=True)
 
 width = 45
 header_text = (
     f"{'=' * width}\n"
-    f"{'NTE AUTO FISHING BOT v1.3'.center(width)}\n"
+    f"{'NTE AUTO FISHING BOT v2.0'.center(width)}\n"
     f"{'[Ultimate Day/Night Fishing]'.center(width)}\n"
     f"{'=' * width}"
 )
