@@ -29,6 +29,16 @@ Python automation bot for fishing in Neverness To Everness.
 
 Check Youtube for preview: [Watch on YouTube](https://youtu.be/r-Q7z-c2ZGw)
 
+<details>
+<summary><b>Click to view Image & GIF Preview</b></summary>
+<br>
+
+![Screenshot](img/ss1.png)
+
+![Gameplay](img/ss2.gif)
+
+</details>
+
 ---
 
 ## 🚀 Getting Started

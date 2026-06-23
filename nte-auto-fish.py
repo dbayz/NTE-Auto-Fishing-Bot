@@ -1,6 +1,7 @@
 import pyautogui
 import time
 import threading
+import customtkinter as ctk
 import tkinter as tk
 import ctypes
 import mss
@@ -20,35 +21,44 @@ except Exception:
 
 CONFIG_FILE = "settings.json"
 
+ctk.set_appearance_mode("Dark")
+ctk.set_default_color_theme("blue")
+
 class FishingBot:
     def __init__(self, root):
         self.root = root
         self.bot_running = False
         self.purchase_session_count = 0
         
+        self.active_key_left = "a"
+        self.active_key_right = "d"
+        self.active_key_sell = "q"
+        self.active_key_bait = "e"
+        
         self.setup_ui()
         self.load_settings()
 
+        try:
+            import keyboard
+            keyboard.add_hotkey('ctrl+alt', self.toggle_bot)
+        except Exception:
+            pass
+
     def setup_ui(self):
-        self.root.title("Auto Fishing Bot - NTE")
-        self.root.geometry("470x420")
+        self.root.title("NTE Auto Fishing Bot")
+        self.root.geometry("600x520")
         self.root.resizable(False, False)
-        self.root.attributes("-topmost", True) 
 
         try:
             self.root.iconbitmap('icon.ico') 
         except Exception:
             pass
 
-        btn_frame = tk.Frame(self.root)
-        btn_frame.pack(pady=10)
+        # === KEYBIND SETUP FRAME ===
+        self.keybind_frame = ctk.CTkFrame(self.root)
+        self.keybind_frame.pack(pady=10, padx=15, fill="x")
 
-        self.start_btn = tk.Button(btn_frame, text="START", bg="#4CAF50", fg="white", font=("Arial", 12, "bold"), width=12, command=self.start_click)
-        self.start_btn.grid(row=0, column=0, padx=10)
-
-        self.stop_btn = tk.Button(btn_frame, text="STOP", bg="#f44336", fg="white", font=("Arial", 12, "bold"), width=12, state=tk.DISABLED, command=self.stop_click)
-        self.stop_btn.grid(row=0, column=1, padx=10)
-
+        # Variables
         self.var_key_left = tk.StringVar(value="A")
         self.var_key_right = tk.StringVar(value="D")
         self.var_key_sell = tk.StringVar(value="Q")
@@ -59,43 +69,86 @@ class FishingBot:
         self.var_key_sell.trace_add("write", lambda *a: self.format_key(self.var_key_sell))
         self.var_key_bait.trace_add("write", lambda *a: self.format_key(self.var_key_bait))
 
-        settings_frame = tk.Frame(self.root)
-        settings_frame.pack(pady=5)
+        ctk.CTkLabel(self.keybind_frame, text="Keybind Setup", font=("Arial", 14, "bold")).grid(row=0, column=0, columnspan=4, pady=(5, 10))
 
-        tk.Label(settings_frame, text="Left (<-) Keybind:").grid(row=0, column=0, padx=5, pady=2)
-        tk.Entry(settings_frame, textvariable=self.var_key_left, width=5, justify='center').grid(row=0, column=1, padx=5)
+        ctk.CTkLabel(self.keybind_frame, text="Left (<-):").grid(row=1, column=0, padx=10, pady=5, sticky="e")
+        ctk.CTkEntry(self.keybind_frame, textvariable=self.var_key_left, width=60, justify='center').grid(row=1, column=1, padx=10, pady=5, sticky="w")
 
-        tk.Label(settings_frame, text="Right (->) Keybind:").grid(row=0, column=2, padx=15, pady=2)
-        tk.Entry(settings_frame, textvariable=self.var_key_right, width=5, justify='center').grid(row=0, column=3, padx=5)
+        ctk.CTkLabel(self.keybind_frame, text="Right (->):").grid(row=1, column=2, padx=10, pady=5, sticky="e")
+        ctk.CTkEntry(self.keybind_frame, textvariable=self.var_key_right, width=60, justify='center').grid(row=1, column=3, padx=10, pady=5, sticky="w")
 
-        tk.Label(settings_frame, text="Sell Fish Keybind:").grid(row=1, column=0, padx=5, pady=2)
-        tk.Entry(settings_frame, textvariable=self.var_key_sell, width=5, justify='center').grid(row=1, column=1, padx=5)
+        ctk.CTkLabel(self.keybind_frame, text="Sell Fish:").grid(row=2, column=0, padx=10, pady=5, sticky="e")
+        ctk.CTkEntry(self.keybind_frame, textvariable=self.var_key_sell, width=60, justify='center').grid(row=2, column=1, padx=10, pady=5, sticky="w")
 
-        tk.Label(settings_frame, text="Bait Menu Keybind:").grid(row=1, column=2, padx=15, pady=2)
-        tk.Entry(settings_frame, textvariable=self.var_key_bait, width=5, justify='center').grid(row=1, column=3, padx=5)
+        ctk.CTkLabel(self.keybind_frame, text="Bait Menu:").grid(row=2, column=2, padx=10, pady=5, sticky="e")
+        ctk.CTkEntry(self.keybind_frame, textvariable=self.var_key_bait, width=60, justify='center').grid(row=2, column=3, padx=10, pady=5, sticky="w")
 
-        console_frame = tk.Frame(self.root, bg="#1e1e1e", bd=2, relief=tk.SUNKEN)
-        console_frame.pack(padx=15, pady=5, fill=tk.BOTH, expand=True)
+        # Make columns responsive
+        for i in range(4):
+            self.keybind_frame.grid_columnconfigure(i, weight=1)
 
-        width = 45
-        header_text = (
-            f"{'=' * width}\n"
-            f"{'NTE AUTO FISHING BOT v2.1'.center(width)}\n"
-            f"{'[Ultimate Day/Night Fishing]'.center(width)}\n"
-            f"{'=' * width}"
-        )
-        header_label = tk.Label(console_frame, text=header_text, bg="#1e1e1e", fg="#00FF00", font=("Consolas", 9), justify=tk.CENTER)
-        header_label.pack(pady=(5, 0))
+        # === MIDDLE SECTION ===
+        self.middle_frame = ctk.CTkFrame(self.root, fg_color="transparent")
+        self.middle_frame.pack(pady=5, padx=15, fill="x")
+        self.middle_frame.grid_columnconfigure(0, weight=1)
+        self.middle_frame.grid_columnconfigure(1, weight=1)
 
-        self.log_text = tk.Text(console_frame, width=50, height=8, font=("Consolas", 9), state=tk.DISABLED, bg="#1e1e1e", fg="#00FF00", bd=0, highlightthickness=0)
-        self.log_text.pack(padx=5, pady=(0, 5))
+        # Output Visualizer
+        self.output_frame = ctk.CTkFrame(self.middle_frame)
+        self.output_frame.grid(row=0, column=0, padx=(0, 5), sticky="nsew")
 
-        self.log_message("Status: Ready. Press START to begin.")
+        ctk.CTkLabel(self.output_frame, text="Output Visualizer", font=("Arial", 12)).pack(pady=5)
+        
+        self.btn_vis_frame = ctk.CTkFrame(self.output_frame, fg_color="transparent")
+        self.btn_vis_frame.pack(pady=10)
+
+        self.vis_left = ctk.CTkButton(self.btn_vis_frame, text="A", width=60, height=60, font=("Arial", 24, "bold"), fg_color="#1f538d", hover=False)
+        self.vis_left.grid(row=0, column=0, padx=10)
+
+        self.vis_right = ctk.CTkButton(self.btn_vis_frame, text="D", width=60, height=60, font=("Arial", 24, "bold"), fg_color="#1f538d", hover=False)
+        self.vis_right.grid(row=0, column=1, padx=10)
+        
+        ctk.CTkLabel(self.output_frame, text="Tips : CTRL + ALT to start / stop bot", font=("Arial", 10, "italic"), text_color="gray").pack(side="bottom", pady=(0, 10))
+
+        # Controls
+        self.control_frame = ctk.CTkFrame(self.middle_frame)
+        self.control_frame.grid(row=0, column=1, padx=(5, 0), sticky="nsew")
+
+        self.status_label = ctk.CTkLabel(self.control_frame, text="Status: Ready", font=("Arial", 14))
+        self.status_label.pack(pady=15)
+
+        self.start_btn = ctk.CTkButton(self.control_frame, text="Start Fishing", font=("Arial", 16, "bold"), fg_color="#2FA572", hover_color="#1D7B50", height=45, command=self.start_click)
+        self.start_btn.pack(pady=5, padx=20, fill="x")
+
+        self.stop_btn = ctk.CTkButton(self.control_frame, text="Stop", font=("Arial", 14, "bold"), fg_color="#E03131", hover_color="#C92A2A", height=35, state="disabled", command=self.stop_click)
+        self.stop_btn.pack(pady=5, padx=20, fill="x")
+
+        # === LOG FRAME ===
+        self.log_frame = ctk.CTkFrame(self.root)
+        self.log_frame.pack(pady=10, padx=15, fill="both", expand=True)
+
+        self.log_text = ctk.CTkTextbox(self.log_frame, font=("Consolas", 11), fg_color="#1e1e1e", text_color="#00FF00", wrap="word")
+        self.log_text.pack(fill="both", expand=True, padx=5, pady=5)
+        self.log_text.configure(state="disabled")
+
+        self.log_message("System initialized. Ready to Fishing - Good Luck!")
 
     def format_key(self, var):
         val = var.get()
         if len(val) > 0 and val != val[-1].upper():
             var.set(val[-1].upper())
+        # Update visualizer text dynamically
+        if hasattr(self, 'vis_left') and var == self.var_key_left:
+            self.vis_left.configure(text=var.get())
+        if hasattr(self, 'vis_right') and var == self.var_key_right:
+            self.vis_right.configure(text=var.get())
+
+    def update_visualizer(self, key, is_down):
+        color = "#2FA572" if is_down else "#1f538d"
+        if key == self.active_key_left:
+            self.vis_left.configure(fg_color=color)
+        elif key == self.active_key_right:
+            self.vis_right.configure(fg_color=color)
 
     def load_settings(self):
         config_data = {
@@ -114,6 +167,12 @@ class FishingBot:
         self.var_key_right.set(config_data["key_right"])
         self.var_key_sell.set(config_data["key_sell"])
         self.var_key_bait.set(config_data["key_bait"])
+        
+        # Manually update visualizer text on load
+        if hasattr(self, 'vis_left'):
+            self.vis_left.configure(text=self.var_key_left.get())
+        if hasattr(self, 'vis_right'):
+            self.vis_right.configure(text=self.var_key_right.get())
 
     def save_settings(self):
         try:
@@ -133,10 +192,13 @@ class FishingBot:
         self.root.after(0, self._insert_log, message)
 
     def _insert_log(self, message):
-        self.log_text.config(state=tk.NORMAL)
-        self.log_text.insert(tk.END, message + "\n")
-        self.log_text.see(tk.END)
-        self.log_text.config(state=tk.DISABLED)
+        self.log_text.configure(state="normal")
+        self.log_text.insert("end", message + "\n")
+        self.log_text.see("end")
+        self.log_text.configure(state="disabled")
+
+    def update_status(self, message):
+        self.root.after(0, lambda: self.status_label.configure(text=f"Status: {message}"))
 
     def safety_delay(self, seconds):
         end_time = time.time() + seconds
@@ -145,23 +207,26 @@ class FishingBot:
             time.sleep(0.1)
         return True
 
-    def press_key(self, key, duration=0.2):
+    def press_hold(self, key):
         pyautogui.keyDown(key)
-        time.sleep(duration)
+        if key in [self.active_key_left, self.active_key_right]:
+            self.root.after(0, self.update_visualizer, key, True)
+
+    def release_key(self, key):
         pyautogui.keyUp(key)
+        if key in [self.active_key_left, self.active_key_right]:
+            self.root.after(0, self.update_visualizer, key, False)
+
+    def press_key(self, key, duration=0.2):
+        self.press_hold(key)
+        time.sleep(duration)
+        self.release_key(key)
 
     def human_move_and_click(self, x, y):
-        # Randomize target coordinates by +/- 5 pixels
         target_x = int(x) + random.randint(-5, 5)
         target_y = int(y) + random.randint(-5, 5)
-        
-        # Randomize movement speed
         move_duration = random.uniform(0.15, 0.35)
-        
-        # Move smoothly using easing function
         pyautogui.moveTo(target_x, target_y, duration=move_duration, tween=pyautogui.easeInOutQuad)
-        
-        # Random short wait before clicking
         time.sleep(random.uniform(0.05, 0.15))
         pyautogui.click()
 
@@ -171,11 +236,18 @@ class FishingBot:
 
     def start_click(self):
         self.save_settings()
+        
+        self.active_key_left = self.var_key_left.get().lower()
+        self.active_key_right = self.var_key_right.get().lower()
+        self.active_key_sell = self.var_key_sell.get().lower()
+        self.active_key_bait = self.var_key_bait.get().lower()
+        
         if not self.bot_running:
             self.bot_running = True
             self.purchase_session_count = 0 
-            self.start_btn.config(state=tk.DISABLED)
-            self.stop_btn.config(state=tk.NORMAL)
+            self.start_btn.configure(state="disabled")
+            self.stop_btn.configure(state="normal")
+            self.update_status("Running...")
             
             thread = threading.Thread(target=self.bot_logic)
             thread.daemon = True 
@@ -183,18 +255,28 @@ class FishingBot:
 
     def stop_click(self):
         if self.bot_running:
+            self.update_status("Stopping...")
             self.log_message(">>> STOPPING BOT... <<<")
             self.log_message("(Waiting for current action to finish)")
             self.bot_running = False
 
+    def toggle_bot(self):
+        if self.bot_running:
+            self.stop_click()
+        else:
+            self.start_click()
+
     def on_stop_cleanup(self):
         self.log_message(">>> BOT STOPPED <<<")
-        pyautogui.keyUp(self.var_key_left.get().lower())
-        pyautogui.keyUp(self.var_key_right.get().lower())
-        pyautogui.keyUp('esc') 
+        self.update_status("Ready")
+        
+        self.release_key(self.active_key_left)
+        self.release_key(self.active_key_right)
+        self.release_key('esc') 
+        
         self.bot_running = False
-        self.start_btn.config(state=tk.NORMAL)
-        self.stop_btn.config(state=tk.DISABLED)
+        self.start_btn.configure(state="normal")
+        self.stop_btn.configure(state="disabled")
 
     def get_hsv_mask(self, img, lower_hsv, upper_hsv):
         hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
@@ -206,20 +288,19 @@ class FishingBot:
         self.log_message(f"\n>>> BAIT EMPTY! Auto-Inventory Session (#{self.purchase_session_count}) <<<")
         
         self.log_message("[1/3] Selling fish...")
-        self.press_key(self.var_key_sell.get().lower())
+        self.press_key(self.active_key_sell)
         if not self.safety_delay(2): return 
         
         if not self.click_and_wait(screen_width * 0.07, screen_height * 0.36, 1.0): return # Fish Market tab
         if not self.click_and_wait(screen_width * 0.55, screen_height * 0.89, 1.5): return # Quick Submit
         if not self.click_and_wait(screen_width * 0.61, screen_height * 0.66, 1.0): return # Confirm
-        if not self.click_and_wait(screen_width * 0.61, screen_height * 0.66, 1.5): return # Confirm 2nd click
         if not self.click_and_wait(screen_width * 0.5, screen_height * 0.5, 1.0): return # Close pop-up
         
         self.press_key('esc') 
         if not self.safety_delay(2): return 
         
         self.log_message("[2/3] Checking for bait...")
-        self.press_key(self.var_key_bait.get().lower()) # Open Bait Switch menu
+        self.press_key(self.active_key_bait) # Open Bait Switch menu
         if not self.safety_delay(1.5): return
         
         box_x = int(screen_width * 0.35)
@@ -309,7 +390,7 @@ class FishingBot:
             
             self.log_message("Confirming bulk purchase...")
             if not self.click_and_wait(screen_width * 0.61, screen_height * 0.66, 1.5): return # Confirm
-            if not self.click_and_wait(screen_width * 0.61, screen_height * 0.66, 1.8): return # Confirm 2
+
             
             self.log_message("Closing reward summary...")
             empty_area_y = int(screen_height * 0.75) 
@@ -340,15 +421,15 @@ class FishingBot:
         else:
             self.log_message("[3/3] Bait stock available. Successfully equipped!")
             
-        self.log_message(">>> Inventory managed! Ready to fish. <<<")
+        self.log_message(">>> Inventory Managed! Ready to fish. <<<")
 
     def bot_logic(self):
-        KEY_LEFT = self.var_key_left.get().lower()
-        KEY_RIGHT = self.var_key_right.get().lower()
+        KEY_LEFT = self.active_key_left
+        KEY_RIGHT = self.active_key_right
         
         self.log_message("\n>>> BOT PREPARATION <<<")
-        self.log_message(f"Active Keybinds -> LEFT: [{KEY_LEFT.upper()}], RIGHT: [{KEY_RIGHT.upper()}]")
-        self.log_message("PLEASE SWITCH TO THE GAME WINDOW NOW!")
+        self.log_message(f"Active Keybinds -> LEFT: [{KEY_LEFT.upper()}], RIGHT <-: [{KEY_RIGHT.upper()}]")
+        self.log_message(">>> SWITCHING TO THE GAME WINDOWS :) <<<")
         
         try:
             for i in range(5, 0, -1):
@@ -360,6 +441,11 @@ class FishingBot:
 
             screen_w, screen_h = pyautogui.size()
             self.log_message(f"Detected Resolution: {screen_w}x{screen_h}")
+            
+            # Force focus on the game window by clicking an empty area (top center-left)
+            self.log_message("Focusing game window...")
+            self.human_move_and_click(screen_w * 0.3, screen_h * 0.1)
+            time.sleep(0.5)
             
             roi_x = int(screen_w * (612 / 1920))
             roi_y = int(screen_h * (50 / 1080))
@@ -474,8 +560,8 @@ class FishingBot:
                         
                         if time.time() - last_seen_bar > 3.0:
                             self.log_message("Mini-game finished!")
-                            pyautogui.keyUp(KEY_LEFT)
-                            pyautogui.keyUp(KEY_RIGHT)
+                            self.release_key(KEY_LEFT)
+                            self.release_key(KEY_RIGHT)
                             break 
 
                         if pos_yellow != -1 and len(blue_pixels) > 0:
@@ -484,17 +570,17 @@ class FishingBot:
                             deadzone = max(2, blue_width // 3) 
                             
                             if pos_yellow < (blue_center - deadzone):
-                                pyautogui.keyUp(KEY_LEFT)
-                                pyautogui.keyDown(KEY_RIGHT)
+                                self.release_key(KEY_LEFT)
+                                self.press_hold(KEY_RIGHT)
                             elif pos_yellow > (blue_center + deadzone):
-                                pyautogui.keyUp(KEY_RIGHT)
-                                pyautogui.keyDown(KEY_LEFT)
+                                self.release_key(KEY_RIGHT)
+                                self.press_hold(KEY_LEFT)
                             else:
-                                pyautogui.keyUp(KEY_LEFT)
-                                pyautogui.keyUp(KEY_RIGHT) 
+                                self.release_key(KEY_LEFT)
+                                self.release_key(KEY_RIGHT) 
                         else:
-                            pyautogui.keyUp(KEY_LEFT)
-                            pyautogui.keyUp(KEY_RIGHT) 
+                            self.release_key(KEY_LEFT)
+                            self.release_key(KEY_RIGHT) 
                             
                        
                         time.sleep(0.008)
@@ -502,7 +588,7 @@ class FishingBot:
                     if not self.bot_running: break 
                     
                     self.log_message("Displaying results...")
-                    if not self.safety_delay(2): break
+                    if not self.safety_delay(1.5): break
                     
                     self.log_message("Closing result window...")
                     self.human_move_and_click(screen_w / 2, screen_h / 1.5)
@@ -510,8 +596,8 @@ class FishingBot:
 
                     self.human_move_and_click(screen_w / 2, screen_h / 1.5)
                     
-                    self.log_message("Next cast in 2 seconds...")
-                    if not self.safety_delay(2): break
+                    self.log_message("Next cast in seconds...")
+                    if not self.safety_delay(0.8): break
                     
         except Exception as e:
             self.log_message(f"Error: {str(e)}")
@@ -519,6 +605,6 @@ class FishingBot:
             self.root.after(0, self.on_stop_cleanup)
 
 if __name__ == "__main__":
-    root = tk.Tk()
+    root = ctk.CTk()
     app = FishingBot(root)
     root.mainloop()

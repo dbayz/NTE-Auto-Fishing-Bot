@@ -2,3 +2,5 @@ pyautogui
 mss
 numpy
 opencv-python
+customtkinter
+keyboard
