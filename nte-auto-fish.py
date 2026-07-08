@@ -4,6 +4,7 @@ import threading
 import customtkinter as ctk
 import tkinter as tk
 import ctypes
+from ctypes import wintypes
 import mss
 import numpy as np
 import os
@@ -40,7 +41,7 @@ class FishingBot:
 
         try:
             import keyboard
-            keyboard.add_hotkey('ctrl+alt', self.toggle_bot)
+            keyboard.add_hotkey('ctrl+alt', lambda: self.root.after(0, self.toggle_bot))
         except Exception:
             pass
 
@@ -278,34 +279,54 @@ class FishingBot:
         self.start_btn.configure(state="normal")
         self.stop_btn.configure(state="disabled")
 
+    def get_game_window_rect(self):
+        hwnd = ctypes.windll.user32.GetForegroundWindow()
+        rect = wintypes.RECT()
+        ctypes.windll.user32.GetClientRect(hwnd, ctypes.byref(rect))
+        point = wintypes.POINT(0, 0)
+        ctypes.windll.user32.ClientToScreen(hwnd, ctypes.byref(point))
+        return point.x, point.y, rect.right - rect.left, rect.bottom - rect.top
+
     def get_hsv_mask(self, img, lower_hsv, upper_hsv):
         hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         mask = cv2.inRange(hsv_img, np.array(lower_hsv), np.array(upper_hsv))
         return np.sum(mask > 0)
 
-    def manage_inventory(self, screen_width, screen_height, sct):
+    def get_ui_x(self, screen_w, screen_h, ratio):
+        # Assume the game UI always scales in a 16:9 aspect ratio centered on the screen
+        ui_w = screen_h * (16 / 9)
+        ui_left = (screen_w - ui_w) / 2
+        return int(ui_left + (ui_w * ratio))
+
+    def get_ui_w(self, screen_h, ratio):
+        ui_w = screen_h * (16 / 9)
+        return int(ui_w * ratio)
+
+    def manage_inventory(self, game_x, game_y, screen_width, screen_height, sct):
         self.purchase_session_count += 1
         self.log_message(f"\n>>> BAIT EMPTY! Auto-Inventory Session (#{self.purchase_session_count}) <<<")
         
         self.log_message("[1/3] Selling fish...")
+        self.update_status("Selling fish...")
         self.press_key(self.active_key_sell)
         if not self.safety_delay(2): return 
         
-        if not self.click_and_wait(screen_width * 0.07, screen_height * 0.36, 1.0): return # Fish Market tab
-        if not self.click_and_wait(screen_width * 0.55, screen_height * 0.89, 1.5): return # Quick Submit
-        if not self.click_and_wait(screen_width * 0.61, screen_height * 0.66, 1.0): return # Confirm
-        if not self.click_and_wait(screen_width * 0.5, screen_height * 0.5, 1.0): return # Close pop-up
+        if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.07), game_y + screen_height * 0.36, 1.0): return # Fish Market tab
+        if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.55), game_y + screen_height * 0.89, 1.5): return # Quick Submit
+        if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.61), game_y + screen_height * 0.66, 1.0): return # Confirm
+        if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.5), game_y + screen_height * 0.5, 1.0): return # Close pop-up
         
         self.press_key('esc') 
         if not self.safety_delay(2): return 
         
         self.log_message("[2/3] Checking for bait...")
+        self.update_status("Checking for bait...")
         self.press_key(self.active_key_bait) # Open Bait Switch menu
         if not self.safety_delay(1.5): return
         
-        box_x = int(screen_width * 0.35)
-        box_y = int(screen_height * 0.45)
-        box_w = int(screen_width * 0.06)
+        box_x = game_x + self.get_ui_x(screen_width, screen_height, 0.35)
+        box_y = game_y + int(screen_height * 0.45)
+        box_w = self.get_ui_w(screen_height, 0.06)
         box_h = int(screen_height * 0.10)
         bait_monitor = {"top": box_y, "left": box_x, "width": box_w, "height": box_h}
         
@@ -318,35 +339,37 @@ class FishingBot:
             self.log_message("Bait is already active (Pink Border). Skipping selection.")
         else:
             self.log_message("Selecting Universal Bait...")
-            if not self.click_and_wait(screen_width * 0.38, screen_height * 0.50, 1.5): return
+            if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.38), game_y + screen_height * 0.50, 1.5): return
             
-        if not self.click_and_wait(screen_width * 0.61, screen_height * 0.66, 2.0): return # Switch/Purchase
+        if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.61), game_y + screen_height * 0.66, 2.0): return # Switch/Purchase
         
-        check_monitor = {"top": int(screen_height * 0.50), "left": int(screen_width * 0.85), "width": 10, "height": 10}
+        check_monitor = {"top": game_y + int(screen_height * 0.50), "left": game_x + self.get_ui_x(screen_width, screen_height, 0.85), "width": 10, "height": 10}
         img_check = np.array(sct.grab(check_monitor))
         avg_bgr = np.mean(img_check, axis=(0,1)) 
         
-        if avg_bgr[0] > 180 and avg_bgr[1] > 180 and avg_bgr[2] > 180:
+        # Lower threshold slightly to 150 to be safe if the panel isn't pure white
+        if avg_bgr[0] > 150 and avg_bgr[1] > 150 and avg_bgr[2] > 150:
             self.log_message("[Info] Out of bait. Entering Tackle Shop...")
+            self.update_status("Entering Tackle Shop...")
             self.log_message("Scanning store inventory...")
             
             slot_list = [
-                (0.08, 0.28), (0.17, 0.28), (0.26, 0.28),
-                (0.08, 0.45), (0.17, 0.45), (0.26, 0.45),
-                (0.08, 0.62), (0.17, 0.62), (0.26, 0.62)
+                (0.08, 0.28), (0.17, 0.28), (0.261, 0.28),
+                (0.08, 0.45), (0.17, 0.45), (0.261, 0.45),
+                (0.08, 0.62), (0.17, 0.62), (0.261, 0.62)
             ]
             
             target_found = False
             for px, py in slot_list:
-                center_x = int(screen_width * px)
-                center_y = int(screen_height * py)
+                center_x = game_x + self.get_ui_x(screen_width, screen_height, px)
+                center_y = game_y + int(screen_height * py)
                 
                 self.human_move_and_click(center_x, center_y)
                 time.sleep(0.5) 
                 
-                icon_x = int(screen_width * 0.76)
-                icon_y = int(screen_height * 0.26)
-                icon_w = int(screen_width * 0.05)
+                icon_x = game_x + self.get_ui_x(screen_width, screen_height, 0.76)
+                icon_y = game_y + int(screen_height * 0.26)
+                icon_w = self.get_ui_w(screen_height, 0.05)
                 icon_h = int(screen_height * 0.09)
                 icon_monitor = {
                     "top": icon_y - (icon_h // 2), 
@@ -359,9 +382,9 @@ class FishingBot:
                 pink_bag = self.get_hsv_mask(img_icon, [140, 50, 100], [170, 255, 255])
                 brown_pellets = self.get_hsv_mask(img_icon, [10, 50, 50], [25, 255, 200])
                 
-                price_x = int(screen_width * 0.85)
-                price_y = int(screen_height * 0.82)
-                price_w = int(screen_width * 0.04)
+                price_x = game_x + self.get_ui_x(screen_width, screen_height, 0.85)
+                price_y = game_y + int(screen_height * 0.82)
+                price_w = self.get_ui_w(screen_height, 0.04)
                 price_h = int(screen_height * 0.037)
                 price_monitor = {
                     "top": price_y - (price_h // 2), 
@@ -385,17 +408,17 @@ class FishingBot:
                 return
                 
             self.log_message("Purchasing bait (Max Quantity)...")
-            if not self.click_and_wait(screen_width * 0.90, screen_height * 0.88, 1.5): return # Slider
-            if not self.click_and_wait(screen_width * 0.85, screen_height * 0.95, 1.5): return # Purchase
+            if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.90), game_y + screen_height * 0.88, 1.5): return # Slider
+            if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.85), game_y + screen_height * 0.95, 1.5): return # Purchase
             
             self.log_message("Confirming bulk purchase...")
-            if not self.click_and_wait(screen_width * 0.61, screen_height * 0.66, 1.5): return # Confirm
+            if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.61), game_y + screen_height * 0.66, 1.5): return # Confirm
 
             
             self.log_message("Closing reward summary...")
-            empty_area_y = int(screen_height * 0.75) 
+            empty_area_y = game_y + int(screen_height * 0.75) 
             for _ in range(3):
-                self.human_move_and_click(screen_width * 0.5, empty_area_y) 
+                self.human_move_and_click(game_x + self.get_ui_x(screen_width, screen_height, 0.5), empty_area_y) 
                 time.sleep(0.3)
                 
             if not self.safety_delay(1.0): return 
@@ -414,14 +437,16 @@ class FishingBot:
             if pink_pixels_v2 > 50:
                 self.log_message("Bait auto-equipped. Skipping selection.")
             else:
-                if not self.click_and_wait(screen_width * 0.38, screen_height * 0.50, 1.0): return
+                if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.38), game_y + screen_height * 0.50, 1.0): return
             
-            if not self.click_and_wait(screen_width * 0.61, screen_height * 0.66, 1.5): return # Switch Button
+            if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.61), game_y + screen_height * 0.66, 1.5): return # Switch Button
             
         else:
             self.log_message("[3/3] Bait stock available. Successfully equipped!")
+
             
         self.log_message(">>> Inventory Managed! Ready to fish. <<<")
+        self.update_status("Inventory managed!")
 
     def bot_logic(self):
         KEY_LEFT = self.active_key_left
@@ -435,21 +460,33 @@ class FishingBot:
             for i in range(5, 0, -1):
                 if not self.bot_running: return 
                 self.log_message(f"Starting in {i}...")
+                self.update_status(f"Starting in {i}...")
                 if not self.safety_delay(1): return 
                 
             if not self.bot_running: return
 
-            screen_w, screen_h = pyautogui.size()
-            self.log_message(f"Detected Resolution: {screen_w}x{screen_h}")
-            
-            # Force focus on the game window by clicking an empty area (top center-left)
-            self.log_message("Focusing game window...")
-            self.human_move_and_click(screen_w * 0.3, screen_h * 0.1)
+            # 1. Click the monitor screen first to bring the game to the foreground (Auto-focus)
+            monitor_w, monitor_h = pyautogui.size()
+            self.log_message("Auto-focusing game window...")
+            self.human_move_and_click(monitor_w * 0.3, monitor_h * 0.1)
             time.sleep(0.5)
             
-            roi_x = int(screen_w * (612 / 1920))
-            roi_y = int(screen_h * (50 / 1080))
-            roi_w = int(screen_w * (701 / 1920))
+            # 2. After the game is clicked and active, measure the window resolution and position
+            game_x, game_y, screen_w, screen_h = self.get_game_window_rect()
+            
+            if screen_w == 0 or screen_h == 0:
+                screen_w, screen_h = monitor_w, monitor_h
+                game_x, game_y = 0, 0
+                
+            self.log_message(f"Detected Game Window: {screen_w}x{screen_h} at ({game_x}, {game_y})")
+            
+            # Dynamic calculation based on the center point
+            # To ensure precision across 16:9, 16:10, and 21:9 aspect ratios
+            center_x = game_x + (screen_w // 2)
+            roi_w = int(screen_h * (701 / 1080)) # Bar width scales with screen height
+            roi_x = center_x - (roi_w // 2)
+            
+            roi_y = game_y + int(screen_h * (50 / 1080))
             roi_h = int(screen_h * (50 / 1080))
             center_y_roi = roi_h // 2
 
@@ -458,35 +495,42 @@ class FishingBot:
                     self.log_message("\n" + "="*30)
                     self.log_message("--- Casting Line ---")
                     
-                    start_btn_x = int(screen_w * 0.82)
-                    start_btn_y = int(screen_h * 0.87)
-                    btn_w = int(screen_w * 0.02)
-                    btn_h = int(screen_h * 0.03)
+                    # Expand the scan area for the "Start Fishing" button
+                    start_btn_x = game_x + self.get_ui_x(screen_w, screen_h, 0.82)
+                    start_btn_y = game_y + int(screen_h * 0.87)
+                    
+                    btn_w = self.get_ui_w(screen_h, 0.15)
+                    btn_h = int(screen_h * 0.06)
                     
                     btn_monitor = {
-                        "top": start_btn_y - (btn_h // 2), 
-                        "left": start_btn_x - (btn_w // 2), 
+                        "top": game_y + int(screen_h * 0.84), 
+                        "left": game_x + self.get_ui_x(screen_w, screen_h, 0.74), 
                         "width": btn_w, 
                         "height": btn_h
                     }
                     img_btn = np.array(sct.grab(btn_monitor))
-                    pixel_white_count = np.sum((img_btn[:,:,2]>200) & (img_btn[:,:,1]>200) & (img_btn[:,:,0]>200))
                     
-                    if pixel_white_count > ((btn_w * btn_h) * 0.5): 
+                    # Menu Requirement: Must contain both white (button background) AND solid black (the "Start Fishing" text)
+                    pixel_white_count = np.sum((img_btn[:,:,2]>200) & (img_btn[:,:,1]>200) & (img_btn[:,:,0]>200))
+                    pixel_black_count = np.sum((img_btn[:,:,2]<50) & (img_btn[:,:,1]<50) & (img_btn[:,:,0]<50))
+                    
+                    total_px = btn_w * btn_h
+                    
+                    # Bright rocks in the new map might be white, but they won't have solid black text inside them
+                    if pixel_white_count > (total_px * 0.3) and pixel_black_count > (total_px * 0.015): 
                         self.log_message("[Recovery] Preparation menu detected!")
                         self.human_move_and_click(start_btn_x, start_btn_y)
-                        if not self.safety_delay(6.0): break 
-                        self.press_key('f')
-                        if not self.safety_delay(1.5): break
-                    else:
-                        self.press_key('f')
-                        if not self.safety_delay(1.5): break 
+                        if not self.safety_delay(6.5): break 
+                        continue # Restart loop to re-evaluate state
+                        
+                    self.press_key('f')
+                    if not self.safety_delay(1.5): break 
                     
-                    banner_y = int(screen_h * 0.48)
+                    banner_y = game_y + int(screen_h * 0.48)
                     banner_h = int(screen_h * 0.04)
-                    box_left_x = int(screen_w * 0.35)
-                    box_right_x = int(screen_w * 0.60)
-                    box_width = int(screen_w * 0.05)
+                    box_left_x = game_x + self.get_ui_x(screen_w, screen_h, 0.35)
+                    box_right_x = game_x + self.get_ui_x(screen_w, screen_h, 0.60)
+                    box_width = self.get_ui_w(screen_h, 0.05)
                     
                     mon_left = {"top": banner_y, "left": box_left_x, "width": box_width, "height": banner_h}
                     mon_right = {"top": banner_y, "left": box_right_x, "width": box_width, "height": banner_h}
@@ -499,11 +543,12 @@ class FishingBot:
                     
                     if white_px > 8:
                         self.log_message("'Equip bait' warning detected!")
-                        self.manage_inventory(screen_w, screen_h, sct)
+                        self.manage_inventory(game_x, game_y, screen_w, screen_h, sct)
                         if not self.bot_running: break
                         continue 
 
                     self.log_message("Spamming 'F' until fish hooks...")
+                    self.update_status("Spamming 'F'...")
                     bar_monitor = {"top": roi_y, "left": roi_x, "width": roi_w, "height": roi_h}
                     
                     minigame_started = False
@@ -535,6 +580,7 @@ class FishingBot:
 
                     if not self.bot_running: break
                     self.log_message("Fish hooked! Mini-game started (Tension Bar)!")
+                    self.update_status("Mini-game active!")
 
                     last_seen_bar = time.time()
                     
@@ -588,15 +634,17 @@ class FishingBot:
                     if not self.bot_running: break 
                     
                     self.log_message("Displaying results...")
+                    self.update_status("Displaying results...")
                     if not self.safety_delay(1.5): break
                     
                     self.log_message("Closing result window...")
-                    self.human_move_and_click(screen_w / 2, screen_h / 1.5)
-                    self.human_move_and_click(screen_w / 2, screen_h / 1.5)
+                    self.human_move_and_click(game_x + screen_w / 2, game_y + screen_h / 1.5)
+                    self.human_move_and_click(game_x + screen_w / 2, game_y + screen_h / 1.5)
 
-                    self.human_move_and_click(screen_w / 2, screen_h / 1.5)
+                    self.human_move_and_click(game_x + screen_w / 2, game_y + screen_h / 1.5)
                     
                     self.log_message("Next cast in seconds...")
+                    self.update_status("Waiting for next cast...")
                     if not self.safety_delay(0.8): break
                     
         except Exception as e:

@@ -15,7 +15,7 @@ Python automation bot for fishing in Neverness To Everness.
 
 ## ⚠️ Important Requirements
 
-- **Resolution**: This bot is currently **strictly optimized for 1920x1080 (1080p) Native Fullscreen**. Using other resolutions (1440p/4K) will cause the visual detection to fail.
+- **Resolution**: This bot is highly optimized for **1920x1080 (1080p) 16:9**. Using other resolutions such as 1440p (2K), 4K, or Ultrawide (21:9) is supported via dynamic scaling, but currently considered **experimental**. If the bot behaves unexpectedly or clicks miss their targets, please set your game resolution to 1080p.
 - **Primary Monitor**: The game must be running on your **Primary Monitor (Monitor 1)** if you are using a multi-monitor setup.
 - **Upscaling & Frame Gen**: Please disable any Upscaling (DLSS / FSR) and Frame Generation (MFG). These technologies can blur or distort UI pixels, preventing the bot from "seeing" the minigame. High framerates (e.g., native 120 FPS) are fully supported.
 - **Run as Administrator**: If you run from source, **you MUST run your terminal/command prompt as Administrator**. If you use the Prebuilt Executable, it is already configured with UAC-Admin and will prompt automatically.
@@ -48,7 +48,7 @@ Check Youtube for preview: [Watch on YouTube](https://youtu.be/r-Q7z-c2ZGw)
 2. Extract the file and run the `.exe`. *(It will automatically request Administrator privileges via UAC)*.
 3. Configure your keybinds, click **START**, and immediately tab into the game window.
 
-### Option 2: Run From Source
+### Option 2: Run From Source (Recommended)
 You need Python 3.x installed on your system.
 
 ```bash
