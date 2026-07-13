@@ -11,6 +11,9 @@ import os
 import json
 import cv2
 import random
+import pyautogui
+
+pyautogui.FAILSAFE = False
 
 # ==========================================
 # DISABLE WINDOWS DPI SCALING
@@ -48,7 +51,8 @@ class FishingBot:
     def setup_ui(self):
         self.root.title("NTE Auto Fishing Bot")
         self.root.geometry("600x520")
-        self.root.resizable(False, False)
+        self.root.minsize(580, 520)
+        self.root.resizable(True, True)
 
         try:
             self.root.iconbitmap('icon.ico') 
@@ -69,6 +73,9 @@ class FishingBot:
         self.var_key_right.trace_add("write", lambda *a: self.format_key(self.var_key_right))
         self.var_key_sell.trace_add("write", lambda *a: self.format_key(self.var_key_sell))
         self.var_key_bait.trace_add("write", lambda *a: self.format_key(self.var_key_bait))
+
+        self.var_always_on_top = tk.BooleanVar(value=True)
+        self.var_always_on_top.trace_add("write", lambda *a: self.toggle_topmost())
 
         ctk.CTkLabel(self.keybind_frame, text="Keybind Setup", font=("Arial", 14, "bold")).grid(row=0, column=0, columnspan=4, pady=(5, 10))
 
@@ -124,6 +131,9 @@ class FishingBot:
         self.stop_btn = ctk.CTkButton(self.control_frame, text="Stop", font=("Arial", 14, "bold"), fg_color="#E03131", hover_color="#C92A2A", height=35, state="disabled", command=self.stop_click)
         self.stop_btn.pack(pady=5, padx=20, fill="x")
 
+        self.topmost_cb = ctk.CTkCheckBox(self.control_frame, text="Always on Top", variable=self.var_always_on_top, font=("Arial", 12))
+        self.topmost_cb.pack(pady=10)
+
         # === LOG FRAME ===
         self.log_frame = ctk.CTkFrame(self.root)
         self.log_frame.pack(pady=10, padx=15, fill="both", expand=True)
@@ -133,6 +143,9 @@ class FishingBot:
         self.log_text.configure(state="disabled")
 
         self.log_message("System initialized. Ready to Fishing - Good Luck!")
+
+    def toggle_topmost(self):
+        self.root.attributes("-topmost", self.var_always_on_top.get())
 
     def format_key(self, var):
         val = var.get()
@@ -156,7 +169,8 @@ class FishingBot:
             "key_left": "A",
             "key_right": "D",
             "key_sell": "Q",
-            "key_bait": "E"
+            "key_bait": "E",
+            "always_on_top": True
         }
         if os.path.exists(CONFIG_FILE):
             try:
@@ -168,6 +182,8 @@ class FishingBot:
         self.var_key_right.set(config_data["key_right"])
         self.var_key_sell.set(config_data["key_sell"])
         self.var_key_bait.set(config_data["key_bait"])
+        self.var_always_on_top.set(config_data.get("always_on_top", True))
+        self.toggle_topmost()
         
         # Manually update visualizer text on load
         if hasattr(self, 'vis_left'):
@@ -181,7 +197,8 @@ class FishingBot:
                 "key_left": self.var_key_left.get(),
                 "key_right": self.var_key_right.get(),
                 "key_sell": self.var_key_sell.get(),
-                "key_bait": self.var_key_bait.get()
+                "key_bait": self.var_key_bait.get(),
+                "always_on_top": self.var_always_on_top.get()
             }
             with open(CONFIG_FILE, "w") as f:
                 json.dump(new_config, f, indent=4)
@@ -635,7 +652,7 @@ class FishingBot:
                     
                     self.log_message("Displaying results...")
                     self.update_status("Displaying results...")
-                    if not self.safety_delay(1.5): break
+                    if not self.safety_delay(1.8): break
                     
                     self.log_message("Closing result window...")
                     self.human_move_and_click(game_x + screen_w / 2, game_y + screen_h / 1.5)
@@ -645,7 +662,7 @@ class FishingBot:
                     
                     self.log_message("Next cast in seconds...")
                     self.update_status("Waiting for next cast...")
-                    if not self.safety_delay(0.8): break
+                    if not self.safety_delay(1.5): break
                     
         except Exception as e:
             self.log_message(f"Error: {str(e)}")
