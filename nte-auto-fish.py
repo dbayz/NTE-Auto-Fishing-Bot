@@ -445,7 +445,7 @@ class FishingBot:
             if not self.safety_delay(2.0): return 
             
             self.log_message("Equipping newly purchased bait...")
-            self.press_key('e') 
+            self.press_key(self.active_key_bait) 
             if not self.safety_delay(1.5): return
 
             img_bait_v2 = np.array(sct.grab(bait_monitor))
