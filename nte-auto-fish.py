@@ -39,6 +39,18 @@ class FishingBot:
         self.active_key_sell = "q"
         self.active_key_bait = "e"
         
+        
+        self.timings = {
+            "delay_sell_fish": 2.0,       # Delay when selling fish at the Fish Market
+            "delay_close_ui": 1.2,        # Delay when closing menus/UI
+            "delay_open_bait": 1.5,       # Delay for loading the Bait menu
+            "delay_tackle_reward": 1.0,   # Delay after clicking claim/ok in Tackle Shop UI
+            "delay_equip_bait": 1.5,      # Delay when purchasing or equipping bait
+            "delay_recovery_time": 6.5,   # Wait time for the character to cast again after error
+            "delay_banner_check": 1.5,    # Delay waiting for the bait warning banner
+            "delay_catch_result": 1.5,    # Wait time for the catch result popup
+            "delay_next_cast": 1.0        # Wait time before throwing the fishing line again
+        }
         self.setup_ui()
         self.load_settings()
 
@@ -116,6 +128,10 @@ class FishingBot:
         self.vis_right = ctk.CTkButton(self.btn_vis_frame, text="D", width=60, height=60, font=("Arial", 24, "bold"), fg_color="#1f538d", hover=False)
         self.vis_right.grid(row=0, column=1, padx=10)
         
+        
+        self.gear_btn = ctk.CTkButton(self.output_frame, text="⚙ Timing Setup", height=28, command=self.open_timing_settings)
+        self.gear_btn.pack(pady=(0, 5))
+
         ctk.CTkLabel(self.output_frame, text="Tips : CTRL + ALT to start / stop bot", font=("Arial", 10, "italic"), text_color="gray").pack(side="bottom", pady=(0, 10))
 
         # Controls
@@ -147,6 +163,110 @@ class FishingBot:
     def toggle_topmost(self):
         self.root.attributes("-topmost", self.var_always_on_top.get())
 
+    
+    def open_timing_settings(self):
+        if hasattr(self, 'timing_window') and self.timing_window.winfo_exists():
+            self.timing_window.focus()
+            return
+            
+        self.timing_window = ctk.CTkToplevel(self.root)
+        self.timing_window.title("Timing Settings")
+        x = self.root.winfo_x()
+        y = self.root.winfo_y()
+        self.timing_window.geometry(f"520x480+{x+40}+{y+40}")
+        self.timing_window.attributes("-topmost", True)
+        self.timing_window.transient(self.root)
+        
+        ctk.CTkLabel(self.timing_window, text="Adjust Bot Timings", font=("Arial", 14, "bold")).pack(pady=(10, 5))
+        
+        scroll_frame = ctk.CTkScrollableFrame(self.timing_window, fg_color="transparent")
+        scroll_frame.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        self.timing_vars = {}
+        
+        def check_changes(*args):
+            changed = False
+            for k, v in self.timing_vars.items():
+                if abs(v.get() - self.timings.get(k, 0)) > 0.01:
+                    changed = True
+                    break
+            if hasattr(self, 'timing_save_btn'):
+                self.timing_save_btn.configure(state="normal" if changed else "disabled")
+        
+        def create_setting_row(parent, label_text, key, min_val, max_val, default_val):
+            row_frame = ctk.CTkFrame(parent, fg_color="transparent")
+            row_frame.pack(fill="x", pady=5, padx=5)
+            
+            ctk.CTkLabel(row_frame, text=label_text, width=160, anchor="w").pack(side="left")
+            
+            var = tk.DoubleVar(value=self.timings.get(key, default_val))
+            self.timing_vars[key] = var
+            
+            def on_entry_change(*args):
+                try:
+                    val = float(entry.get())
+                    if val < min_val: val = min_val
+                    if val > max_val: val = max_val
+                    var.set(val)
+                    check_changes()
+                except ValueError:
+                    pass
+            
+            def on_slider_change(val):
+                entry.delete(0, 'end')
+                entry.insert(0, f"{val:.1f}")
+                var.set(round(val, 1))
+                check_changes()
+                
+            slider = ctk.CTkSlider(row_frame, from_=min_val, to=max_val, variable=var, command=on_slider_change)
+            slider.pack(side="left", expand=True, padx=10)
+            
+            entry = ctk.CTkEntry(row_frame, width=45, justify="center")
+            entry.pack(side="left")
+            entry.insert(0, f"{var.get():.1f}")
+            entry.bind("<Return>", on_entry_change)
+            entry.bind("<FocusOut>", on_entry_change)
+            
+            def reset_val():
+                var.set(default_val)
+                slider.set(default_val)
+                entry.delete(0, 'end')
+                entry.insert(0, f"{default_val:.1f}")
+                check_changes()
+                
+            reset_btn = ctk.CTkButton(row_frame, text="!", width=30, font=("Arial", 16, "bold"), command=reset_val)
+            reset_btn.pack(side="left", padx=(5,0))
+            
+            return reset_val
+            
+        resets = []
+        resets.append(create_setting_row(scroll_frame, "Sell Fish (s):", "delay_sell_fish", 1.0, 10.0, 2.0))
+        resets.append(create_setting_row(scroll_frame, "Close UI (s):", "delay_close_ui", 1.0, 10.0, 1.2))
+        resets.append(create_setting_row(scroll_frame, "Open Bait Menu (s):", "delay_open_bait", 1.0, 10.0, 1.5))
+        resets.append(create_setting_row(scroll_frame, "Fishing shop pop-up (s):", "delay_tackle_reward", 1.0, 10.0, 1.0))
+        resets.append(create_setting_row(scroll_frame, "Equip Bait (s):", "delay_equip_bait", 1.0, 10.0, 1.5))
+        resets.append(create_setting_row(scroll_frame, "Recovery Time (s):", "delay_recovery_time", 1.0, 10.0, 6.5))
+        resets.append(create_setting_row(scroll_frame, "Bait Warning (s):", "delay_banner_check", 1.0, 10.0, 1.5))
+        resets.append(create_setting_row(scroll_frame, "Catch Result (s):", "delay_catch_result", 1.0, 10.0, 1.5))
+        resets.append(create_setting_row(scroll_frame, "Next Cast (s):", "delay_next_cast", 1.0, 10.0, 1.0))
+        
+        btn_frame = ctk.CTkFrame(self.timing_window, fg_color="transparent")
+        btn_frame.pack(pady=10)
+        
+        def save_all():
+            for k, v in self.timing_vars.items():
+                self.timings[k] = v.get()
+            self.save_settings()
+            check_changes()
+            
+        self.timing_save_btn = ctk.CTkButton(btn_frame, text="Save Settings", fg_color="#2FA572", hover_color="#1D7B50", state="disabled", command=save_all)
+        self.timing_save_btn.grid(row=0, column=0, padx=10)
+        
+        def reset_all():
+            for r in resets: r()
+                
+        ctk.CTkButton(btn_frame, text="Reset All to Default", fg_color="#E03131", hover_color="#C92A2A", command=reset_all).grid(row=0, column=1, padx=10)
+
     def format_key(self, var):
         val = var.get()
         if len(val) > 0 and val != val[-1].upper():
@@ -170,7 +290,18 @@ class FishingBot:
             "key_right": "D",
             "key_sell": "Q",
             "key_bait": "E",
-            "always_on_top": True
+            "always_on_top": True,
+            "timings": {
+                "delay_sell_fish": 2.0,
+                "delay_close_ui": 1.2,
+                "delay_open_bait": 1.5,
+                "delay_tackle_reward": 1.0,
+                "delay_equip_bait": 1.5,
+                "delay_recovery_time": 6.5,
+                "delay_banner_check": 1.5,
+                "delay_catch_result": 1.5,
+                "delay_next_cast": 1.0
+            }
         }
         if os.path.exists(CONFIG_FILE):
             try:
@@ -185,20 +316,34 @@ class FishingBot:
         self.var_always_on_top.set(config_data.get("always_on_top", True))
         self.toggle_topmost()
         
+        
+        loaded_timings = config_data.get("timings", {})
+        self.timings["delay_sell_fish"] = loaded_timings.get("delay_sell_fish", 2.0)
+        self.timings["delay_close_ui"] = loaded_timings.get("delay_close_ui", 1.2)
+        self.timings["delay_open_bait"] = loaded_timings.get("delay_open_bait", 1.5)
+        self.timings["delay_tackle_reward"] = loaded_timings.get("delay_tackle_reward", 1.0)
+        self.timings["delay_equip_bait"] = loaded_timings.get("delay_equip_bait", 1.5)
+        self.timings["delay_recovery_time"] = loaded_timings.get("delay_recovery_time", 6.5)
+        self.timings["delay_banner_check"] = loaded_timings.get("delay_banner_check", 1.5)
+        self.timings["delay_catch_result"] = loaded_timings.get("delay_catch_result", 1.5)
+        self.timings["delay_next_cast"] = loaded_timings.get("delay_next_cast", 1.0)
+        
         # Manually update visualizer text on load
+
         if hasattr(self, 'vis_left'):
             self.vis_left.configure(text=self.var_key_left.get())
         if hasattr(self, 'vis_right'):
             self.vis_right.configure(text=self.var_key_right.get())
 
-    def save_settings(self):
+    def save_settings(self, silent=False):
         try:
             new_config = {
                 "key_left": self.var_key_left.get(),
                 "key_right": self.var_key_right.get(),
                 "key_sell": self.var_key_sell.get(),
                 "key_bait": self.var_key_bait.get(),
-                "always_on_top": self.var_always_on_top.get()
+                "always_on_top": self.var_always_on_top.get(),
+                "timings": self.timings
             }
             with open(CONFIG_FILE, "w") as f:
                 json.dump(new_config, f, indent=4)
@@ -279,6 +424,12 @@ class FishingBot:
             self.bot_running = False
 
     def toggle_bot(self):
+        import time
+        current_time = time.time()
+        if current_time - getattr(self, 'last_toggle_time', 0) < 0.5:
+            return
+        self.last_toggle_time = current_time
+        
         if self.bot_running:
             self.stop_click()
         else:
@@ -326,20 +477,27 @@ class FishingBot:
         self.log_message("[1/3] Selling fish...")
         self.update_status("Selling fish...")
         self.press_key(self.active_key_sell)
-        if not self.safety_delay(2): return 
+        if not self.safety_delay(self.timings["delay_close_ui"]): return 
         
-        if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.07), game_y + screen_height * 0.36, 1.0): return # Fish Market tab
-        if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.55), game_y + screen_height * 0.89, 1.5): return # Quick Submit
-        if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.61), game_y + screen_height * 0.66, 1.0): return # Confirm
-        if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.5), game_y + screen_height * 0.5, 1.0): return # Close pop-up
+        self.log_message(f" - Opening Fish Market tab ({self.timings['delay_sell_fish']}s)...")
+        if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.07), game_y + screen_height * 0.36, self.timings["delay_sell_fish"]): return # Fish Market tab
+        
+        self.log_message(f" - Clicking Quick Submit ({self.timings['delay_equip_bait']}s)...")
+        if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.55), game_y + screen_height * 0.89, self.timings["delay_equip_bait"]): return # Quick Submit
+        
+        self.log_message(f" - Confirming sell ({self.timings['delay_sell_fish']}s)...")
+        if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.61), game_y + screen_height * 0.66, self.timings["delay_sell_fish"]): return # Confirm
+        
+        self.log_message(f" - Closing pop-up ({self.timings['delay_close_ui']}s)...")
+        if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.5), game_y + screen_height * 0.5, self.timings["delay_close_ui"]): return # Close pop-up
         
         self.press_key('esc') 
-        if not self.safety_delay(2): return 
+        if not self.safety_delay(self.timings["delay_close_ui"]): return 
         
-        self.log_message("[2/3] Checking for bait...")
+        self.log_message(f"[2/3] Checking for bait ({self.timings['delay_open_bait']}s)...")
         self.update_status("Checking for bait...")
         self.press_key(self.active_key_bait) # Open Bait Switch menu
-        if not self.safety_delay(1.5): return
+        if not self.safety_delay(self.timings["delay_open_bait"]): return
         
         box_x = game_x + self.get_ui_x(screen_width, screen_height, 0.35)
         box_y = game_y + int(screen_height * 0.45)
@@ -355,10 +513,10 @@ class FishingBot:
         if pink_pixels > 50:
             self.log_message("Bait is already active (Pink Border). Skipping selection.")
         else:
-            self.log_message("Selecting Universal Bait...")
-            if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.38), game_y + screen_height * 0.50, 1.5): return
+            self.log_message(f"Selecting Universal Bait ({self.timings['delay_equip_bait']}s)...")
+            if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.38), game_y + screen_height * 0.50, self.timings["delay_equip_bait"]): return
             
-        if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.61), game_y + screen_height * 0.66, 2.0): return # Switch/Purchase
+        if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.61), game_y + screen_height * 0.66, self.timings["delay_close_ui"]): return # Switch/Purchase
         
         check_monitor = {"top": game_y + int(screen_height * 0.50), "left": game_x + self.get_ui_x(screen_width, screen_height, 0.85), "width": 10, "height": 10}
         img_check = np.array(sct.grab(check_monitor))
@@ -424,29 +582,29 @@ class FishingBot:
                 self.bot_running = False
                 return
                 
-            self.log_message("Purchasing bait (Max Quantity)...")
-            if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.90), game_y + screen_height * 0.88, 1.5): return # Slider
-            if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.85), game_y + screen_height * 0.95, 1.5): return # Purchase
+            self.log_message(f"Purchasing bait (Max Quantity) ({self.timings['delay_equip_bait']}s)...")
+            if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.90), game_y + screen_height * 0.88, self.timings["delay_equip_bait"]): return # Slider
+            if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.85), game_y + screen_height * 0.95, self.timings["delay_equip_bait"]): return # Purchase
             
-            self.log_message("Confirming bulk purchase...")
-            if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.61), game_y + screen_height * 0.66, 1.5): return # Confirm
+            self.log_message(f"Confirming bulk purchase ({self.timings['delay_equip_bait']}s)...")
+            if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.61), game_y + screen_height * 0.66, self.timings["delay_equip_bait"]): return # Confirm
 
             
-            self.log_message("Closing reward summary...")
+            self.log_message(f"Closing reward summary ({self.timings['delay_tackle_reward']}s)...")
             empty_area_y = game_y + int(screen_height * 0.75) 
             for _ in range(3):
                 self.human_move_and_click(game_x + self.get_ui_x(screen_width, screen_height, 0.5), empty_area_y) 
                 time.sleep(0.3)
                 
-            if not self.safety_delay(1.0): return 
+            if not self.safety_delay(self.timings["delay_tackle_reward"]): return 
             
-            self.log_message("Exiting Tackle Shop...")
+            self.log_message(f"Exiting Tackle Shop ({self.timings['delay_close_ui']}s)...")
             self.press_key('esc') 
-            if not self.safety_delay(2.0): return 
+            if not self.safety_delay(self.timings["delay_close_ui"]): return 
             
-            self.log_message("Equipping newly purchased bait...")
+            self.log_message(f"Equipping newly purchased bait ({self.timings['delay_banner_check']}s)...")
             self.press_key(self.active_key_bait) 
-            if not self.safety_delay(1.5): return
+            if not self.safety_delay(self.timings["delay_banner_check"]): return
 
             img_bait_v2 = np.array(sct.grab(bait_monitor))
             pink_pixels_v2 = self.get_hsv_mask(img_bait_v2, [140, 50, 150], [170, 255, 255])
@@ -454,9 +612,9 @@ class FishingBot:
             if pink_pixels_v2 > 50:
                 self.log_message("Bait auto-equipped. Skipping selection.")
             else:
-                if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.38), game_y + screen_height * 0.50, 1.0): return
+                if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.38), game_y + screen_height * 0.50, self.timings["delay_equip_bait"]): return
             
-            if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.61), game_y + screen_height * 0.66, 1.5): return # Switch Button
+            if not self.click_and_wait(game_x + self.get_ui_x(screen_width, screen_height, 0.61), game_y + screen_height * 0.66, self.timings["delay_equip_bait"]): return # Switch Button
             
         else:
             self.log_message("[3/3] Bait stock available. Successfully equipped!")
@@ -478,7 +636,7 @@ class FishingBot:
                 if not self.bot_running: return 
                 self.log_message(f"Starting in {i}...")
                 self.update_status(f"Starting in {i}...")
-                if not self.safety_delay(1): return 
+                if not self.safety_delay(1.0): return 
                 
             if not self.bot_running: return
 
@@ -535,13 +693,13 @@ class FishingBot:
                     
                     # Bright rocks in the new map might be white, but they won't have solid black text inside them
                     if pixel_white_count > (total_px * 0.3) and pixel_black_count > (total_px * 0.015): 
-                        self.log_message("[Recovery] Preparation menu detected!")
+                        self.log_message(f"[Recovery] Preparation menu detected! Wait {self.timings['delay_recovery_time']}s...")
                         self.human_move_and_click(start_btn_x, start_btn_y)
-                        if not self.safety_delay(6.5): break 
+                        if not self.safety_delay(self.timings["delay_recovery_time"]): break 
                         continue # Restart loop to re-evaluate state
                         
                     self.press_key('f')
-                    if not self.safety_delay(1.5): break 
+                    if not self.safety_delay(self.timings["delay_banner_check"]): break 
                     
                     banner_y = game_y + int(screen_h * 0.48)
                     banner_h = int(screen_h * 0.04)
@@ -559,7 +717,7 @@ class FishingBot:
                                np.sum((img_r[::2,::3,2]>240)&(img_r[::2,::3,1]>240)&(img_r[::2,::3,0]>240))
                     
                     if white_px > 8:
-                        self.log_message("'Equip bait' warning detected!")
+                        self.log_message(f"'Equip bait' warning detected! Waiting {self.timings['delay_banner_check']}s...")
                         self.manage_inventory(game_x, game_y, screen_w, screen_h, sct)
                         if not self.bot_running: break
                         continue 
@@ -650,19 +808,20 @@ class FishingBot:
                     
                     if not self.bot_running: break 
                     
-                    self.log_message("Displaying results...")
+                    self.log_message(f"Displaying results ({self.timings['delay_catch_result']}s)...")
                     self.update_status("Displaying results...")
-                    if not self.safety_delay(1.8): break
+                    if not self.safety_delay(self.timings["delay_catch_result"]): break
                     
-                    self.log_message("Closing result window...")
+                    self.log_message(f"Closing result window ({self.timings['delay_close_ui']}s)...")
                     self.human_move_and_click(game_x + screen_w / 2, game_y + screen_h / 1.5)
                     self.human_move_and_click(game_x + screen_w / 2, game_y + screen_h / 1.5)
+                    self.human_move_and_click(game_x + screen_w / 2, game_y + screen_h / 1.5)
+                    
+                    if not self.safety_delay(self.timings["delay_close_ui"]): break
 
-                    self.human_move_and_click(game_x + screen_w / 2, game_y + screen_h / 1.5)
-                    
-                    self.log_message("Next cast in seconds...")
+                    self.log_message(f"Next cast in {self.timings['delay_next_cast']} seconds...")
                     self.update_status("Waiting for next cast...")
-                    if not self.safety_delay(1.5): break
+                    if not self.safety_delay(self.timings["delay_next_cast"]): break
                     
         except Exception as e:
             self.log_message(f"Error: {str(e)}")

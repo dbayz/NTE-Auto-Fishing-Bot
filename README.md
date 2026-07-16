@@ -35,9 +35,29 @@ Check Youtube for preview: [Watch on YouTube](https://youtu.be/r-Q7z-c2ZGw)
 
 ![Screenshot](img/ss1.png)
 
+![Timing Settings](img/ss3.png)
 ![Gameplay](img/ss2.gif)
 
 </details>
+
+---
+
+## ⏱️ Timing Settings (Advanced)
+You can configure the bot timings by clicking the `⚙ Timing Setup` button in the UI.
+
+| Setting Name | Default Value | Explanation |
+|--------------|---------------|-------------|
+| **Sell Fish (s)** | 2.0 | Delay when selling fish at the Fish Market |
+| **Close UI (s)*** | 1.2 | Delay when closing menus or exiting the UI |
+| **Open Bait Menu (s)** | 1.5 | Delay for loading the Bait menu |
+| **Fishing shop pop-up (s)** | 1.0 | Delay after clicking claim or ok in the Tackle Shop UI |
+| **Equip Bait (s)** | 1.5 | Delay when purchasing or equipping bait |
+| **Recovery Time (s)** | 6.5 | Wait time for the character to cast again after an error (Kicking to preparation menu) |
+| **Bait Warning (s)*** | 1.5 | Delay waiting for the bait warning banner to appear |
+| **Catch Result (s)*** | 1.5 | Wait time for the catch result popup to appear |
+| **Next Cast (s)*** | 1.0 | Wait time before throwing the fishing line again |
+
+> **Note**: `*` It is recommended to adjust these values if the fishing process feels too fast or too slow.
 
 ---
 
@@ -65,3 +85,4 @@ Launch the GUI:
 ```bash
 python nte-auto-fish.py
 ```
+
